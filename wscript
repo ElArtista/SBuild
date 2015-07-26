@@ -19,7 +19,7 @@ default_prefix = '.'
 # Project specific options used by our tasks
 ###########################################################################
 
-# Set the master output type to either 'Program', 'StLib', 'DLib'
+# Set the master output type to either 'Program', 'StLib', 'DLib', 'Tests'
 PROJECT_TYPE      = 'Program'
 
 # Specify the source files to be compiled
@@ -106,7 +106,7 @@ def get_compiler_flags(ctx, compiler_name, build_variant):
         },
         'Debug':
         {
-            'msvc'   : ['/MTd', '/Zi', '/Od', '/FS', '/Fd' + ctx.get_output_name()],
+            'msvc'   : ['/MTd', '/Zi', '/Od', '/FS'],
             'g++'    : ['-g', '-Og'],
             'gcc'    : ['-g', '-Og'],
             'clang++': ['-g', '-O0'],
@@ -124,9 +124,12 @@ def get_compiler_flags(ctx, compiler_name, build_variant):
 def get_linker_flags(ctx, compiler_name, build_variant):
     # Common flags for all build variants
     base_flags = {
-                     'msvc'   : ['/nologo', '/manifest', '/subsystem:windows', '/entry:mainCRTStartup'],
-                     'g++'    : ['-static', '-static-libgcc', '-static-libstdc++', '-Wl,-subsystem,windows'],
-                     'clang++': ['-static', '-static-libgcc', '-static-libstdc++', '-Wl,-subsystem,windows'],
+                     'msvc'   : ['/nologo', '/manifest', '/entry:mainCRTStartup'],
+                     'g++'    : ['-static', '-static-libgcc', '-static-libstdc++'],
+                     'clang++': ['-static', '-static-libgcc', '-static-libstdc++'],
+                     #'msvc'   : ['/nologo', '/manifest', '/subsystem:windows', '/entry:mainCRTStartup'],
+                     #'g++'    : ['-static', '-static-libgcc', '-static-libstdc++', '-Wl,-subsystem,windows'],
+                     #'clang++': ['-static', '-static-libgcc', '-static-libstdc++', '-Wl,-subsystem,windows'],
                  }
 
     variant_specific_flags = \
@@ -139,7 +142,7 @@ def get_linker_flags(ctx, compiler_name, build_variant):
         },
         'Debug':
         {
-            'msvc'   : ['/debug', '/pdb:' + ctx.get_output_name()],
+            'msvc'   : ['/debug'],
             'g++'    : [],
             'clang++': [],
         }
@@ -301,18 +304,28 @@ def build(bld):
 
     # Set task features according to project type
     feat = ['cxx', 'c']
-    feat.extend({'Program': ['cxxprogram', 'cprogram'], 'StLib': ['cxxstlib', 'cstlib'], 'DLib': ['cxxshlib', 'cshlib']}[PROJECT_TYPE])
-
-    # Set target name according to project type
-    tgt_name = bld.get_output_name()
+    feat.extend({
+                        'Program' : ['cxxprogram', 'cprogram'],
+                        'StLib'   : ['cxxstlib', 'cstlib'],
+                        'DLib'    : ['cxxshlib', 'cshlib'],
+                        'Tests'   : ['cxxprogram', 'cprogram']
+                }[PROJECT_TYPE])
 
     # Generate build task
-    bld(
+    task_generator = lambda source, target: bld(
         features        =   feat,
-        source          =   source_files,
-        target          =   tgt_name,
-        install_path    =   {'Program': "${BINDIR}", 'StLib': "${LIBDIR}", 'DLib': "${BINDIR}"}[PROJECT_TYPE]
+        source          =   source,
+        target          =   target,
+        install_path    =   {'Program': "${BINDIR}", 'StLib': "${LIBDIR}", 'DLib': "${BINDIR}", 'Tests': "${BINDIR}"}[PROJECT_TYPE]
     )
+
+    if PROJECT_TYPE in ['Program', 'StLib', 'DLib']:
+        # Set target name according to project type
+        tgt_name = bld.get_output_name()
+        task_generator(source_files, tgt_name)
+    elif PROJECT_TYPE in ['Tests']:
+        for s in source_files:
+            task_generator(s, os.path.splitext(s.__str__())[0])
 
 def dist(ctx):
     ctx.base_name = APPNAME.lower() + '_' + VERSION
